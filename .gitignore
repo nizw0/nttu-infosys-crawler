@@ -1,0 +1,7 @@
+model/*
+processor/*
+venv/*
+
+
+*.log
+captcha*.png
