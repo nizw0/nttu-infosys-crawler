@@ -1,125 +1,95 @@
 import json
-import os
-import time
-import warnings
-from pprint import pprint
 
-import requests
-from PIL import Image
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.firefox.options import Options
-from selenium.webdriver.firefox.service import Service
-from transformers import TrOCRProcessor, VisionEncoderDecoderModel, logging
+import termcharts
+from textual import on, work
+from textual.app import App, ComposeResult
+from textual.binding import Binding
+from textual.containers import Center, Middle, VerticalScroll
+from textual.widget import Widget
+from textual.widgets import (Button, Footer, Header, Input, LoadingIndicator, Pretty, Static)
 
-# load config
-config = json.load(open('config.json', 'r'))
-if not config:
-    raise FileNotFoundError
-
-# user configuration
-username = config['username']
-password = config['password']
-
-# define path and url
-driver_path = 'C:\\Users\\nizw0\\bin\\geckodriver.exe'
-firefox_path = 'C:\\Program Files\\Firefox Developer Edition\\firefox.exe'
-infosys_url = 'https://infosys.nttu.edu.tw/webClientMain.aspx'
-
-# init
-options = Options()
-options.binary_location = firefox_path
-options.add_argument('--headless')
-service = Service(driver_path)
-browser = webdriver.Firefox(service=service, options=options)
-
-warnings.filterwarnings('ignore')
-logging.set_verbosity_error()
-
-# define processor and model
-processor = TrOCRProcessor
-model = VisionEncoderDecoderModel
-
-# clear log
-os.system('clear')
+from util import fetch_scores
 
 
-def main():
-    print('program started')
+class LoginForm(Widget):
 
-    # load page
-    browser.get(infosys_url)
+    def compose(self) -> ComposeResult:
+        with Middle():
+            yield Input(id='username', placeholder='Username (Student ID)', classes='label')
+            yield Input(id='password', placeholder='Password', password=True, classes='label')
+            with Center():
+                yield Button(id='login', label='Login', variant='primary')
 
-    # load processor and model
-    global processor, model
-    processor = processor.from_pretrained('microsoft/trocr-base-printed')
-    model = model.from_pretrained('microsoft/trocr-base-printed')
+    @on(Button.Pressed, '#login')
+    def submit(self) -> None:
+        username = self.query_one('#username').value
+        password = self.query_one('#password').value
+        if not username and not password:
+            return
+        with open('./config.json', 'w') as f:
+            json.dump({'username': username, 'password': password}, f)
 
-    for i in range(1, 100):
-        # type login data
-        browser.find_element(By.ID, 'txtUserName').clear()
-        browser.find_element(By.ID, 'txtUserName').send_keys(username)
-        browser.find_element(By.ID, 'txtPassword').send_keys(password)
-        with open('captcha.png', 'wb') as file:
-            img = browser.find_element(By.ID, 'Image1')
-            file.write(img.screenshot_as_png)
 
-        # load captcha image
-        image = Image.open('captcha.png').convert('L').convert('RGB')
-        image.save('captcha-x.png')
-        pixel_values = processor(images=image, return_tensors='pt').pixel_values
+class CrawlerApp(App):
+    TITLE = '校務系統成績抓抓'
+    CSS_PATH = 'main.css'
+    BINDINGS = [
+        Binding(key='q', action='quit', description='Quit'),
+        Binding(key='d', action='toggle_dark', description='Toggle dark mode'),
+    ]
 
-        # predict
-        generated_ids = model.generate(pixel_values)
-        captcha_code = processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
-        captcha_code = captcha_code.replace(' ', '')
-        print(captcha_code)
-        if len(captcha_code) != 4 or not captcha_code.isdigit():
-            browser.get(browser.current_url)
-            continue
+    def compose(self) -> ComposeResult:
+        yield Header(show_clock=True)
+        yield LoadingIndicator()
+        yield LoginForm()
+        with VerticalScroll():
+            with Center():
+                yield Static(id='ranks')
+                yield Static(id='scores')
+                yield Static(id='credits')
+                yield Pretty('')
+        yield Footer()
 
-        # type captcha
-        browser.find_element(By.ID, 'tbCheckCode').clear()
-        browser.find_element(By.ID, 'tbCheckCode').send_key(captcha_code)
-        browser.find_element(By.ID, 'OKButton').click()
-        try:
-            browser.find_element(By.ID, 'FailureText')
-            time.sleep(3)
-        except Exception:
-            print('login successful')
-            break
+    def on_mount(self) -> None:
+        self.query_one(LoadingIndicator).display = False
+        self.query_one('#ranks').display = False
+        self.query_one('#scores').display = False
+        self.query_one('#credits').display = False
+        self.query_one(Pretty).display = False
 
-    # fetch data
-    data = []
-    for i in range(1, 5):
-        try:
-            data_url = 'https://infosys.nttu.edu.tw/n_LearningEffect/Stu_StudyEf_Dashboard.aspx/GetJson'
-            headers = {'Content-Type': 'application/json; charset=utf-8'}
-            response = requests.post(data_url, headers=headers)
-            if response.status_code != 200:
-                response.raise_for_status()
-                data = json.loads(response.text)
-                data = json.loads(data['d'])
-                data.reverse()
-                break
-        except Exception:
-            time.sleep(3)
-            continue
-    if not data:
-        raise requests.RequestException
+    def action_toggle_dark(self) -> None:
+        self.dark = not self.dark
 
-    avg_score = 0
-    sum_credit = 0
-    for datum in data:
-        pprint(datum)
-        avg_score += datum['avg_score']
-        sum_credit += datum['sum_credit']
-    avg_score = avg_score / len(data)
-    print(f'average score: {avg_score}, total credit: {int(sum_credit)}')
+    @on(Button.Pressed, '#login')
+    def next(self) -> None:
+        self.update_data()
 
-    # close browser
-    browser.close()
+    @work(exclusive=True)
+    def update_data(self) -> None:
+        self.query_one(LoadingIndicator).display = True
+        self.query_one(LoginForm).display = False
+        self.query_one('#ranks').display = False
+        self.query_one('#scores').display = False
+        self.query_one('#credits').display = False
+        self.query_one(Pretty).display = False
+        data = fetch_scores()
+        ranks = termcharts.bar(dict((datum['semYear'], int(datum['sort'])) for datum in data), title='ranks')
+        scores = termcharts.bar(dict((datum['semYear'], int(datum['avg_score'])) for datum in data), title='scores')
+        credits = termcharts.bar(dict((datum['semYear'], int(datum['sum_credit'])) for datum in data), title='credits')
+        self.call_from_thread(self.query_one(Pretty).update, data)
+        self.call_from_thread(self.query_one('#ranks').update, ranks)
+        self.call_from_thread(self.query_one('#scores').update, scores)
+        self.call_from_thread(self.query_one('#credits').update, credits)
+
+    def on_worker_state_changed(self, event) -> None:
+        self.log(event)
+        self.query_one('#ranks').display = True
+        self.query_one('#scores').display = True
+        self.query_one('#credits').display = True
+        self.query_one(Pretty).display = True
+        self.query_one(LoadingIndicator).display = False
 
 
 if __name__ == '__main__':
-    main()
+    app = CrawlerApp()
+    app.run()

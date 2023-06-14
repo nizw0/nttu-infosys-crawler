@@ -59,8 +59,8 @@ def main():
         # load processor and model
         bar.text('loading processor and model')
         global processor, model
-        processor = processor.from_pretrained('processor')
-        model = model.from_pretrained('model')
+        processor = processor.from_pretrained('microsoft/trocr-base-printed')
+        model = model.from_pretrained('microsoft/trocr-base-printed')
 
         for i in range(1, 100):
             bar()
@@ -105,6 +105,7 @@ def main():
                 bar(100 - i)
                 break
 
+    time.sleep(3)
     # fetch data
     data = []
     with alive_bar(5, title='fetching data') as bar:

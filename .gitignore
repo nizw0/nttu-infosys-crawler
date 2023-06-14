@@ -1,7 +1,9 @@
+__pycache__/*
 model/*
 processor/*
 venv/*
 
 
+config.json
 *.log
 captcha*.png
