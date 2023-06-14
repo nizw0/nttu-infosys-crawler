@@ -84,8 +84,9 @@ def fetch_scores():
     time.sleep(5)
     # fetch data
     data = []
-    for i in range(1, 5):
+    for _ in range(1, 5):
         try:
+            browser.get('https://infosys.nttu.edu.tw/n_LearningEffect/Stu_StudyEf_Dashboard.aspx?ItemParam=')
             data_url = 'https://infosys.nttu.edu.tw/n_LearningEffect/Stu_StudyEf_Dashboard.aspx/GetJson'
             headers = {'Content-Type': 'application/json'}
             cookies = requests.get(infosys_url).cookies

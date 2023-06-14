@@ -113,11 +113,13 @@ def main():
         for i in range(1, 5):
             bar()
             try:
+                browser.get('https://infosys.nttu.edu.tw/n_LearningEffect/Stu_StudyEf_Dashboard.aspx?ItemParam=')
                 data_url = 'https://infosys.nttu.edu.tw/n_LearningEffect/Stu_StudyEf_Dashboard.aspx/GetJson'
                 headers = {'Content-Type': 'application/json; charset=utf-8'}
                 cookies = requests.get(infosys_url).cookies
                 response = requests.post(data_url, headers=headers, cookies=cookies)
                 if response.status_code != 200:
+                    print(response)
                     response.raise_for_status()
                 data = json.loads(response.text)
                 data = json.loads(data['d'])
