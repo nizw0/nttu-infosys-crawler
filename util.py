@@ -78,18 +78,18 @@ def fetch_scores():
             if failure.text.find(username) != -1:
                 browser.find_element(By.ID, 'ReLoginButton').click()
                 raise EOFError
-            time.sleep(3)
         except Exception:
             break
 
-    time.sleep(3)
+    time.sleep(5)
     # fetch data
     data = []
     for i in range(1, 5):
         try:
             data_url = 'https://infosys.nttu.edu.tw/n_LearningEffect/Stu_StudyEf_Dashboard.aspx/GetJson'
             headers = {'Content-Type': 'application/json'}
-            response = requests.post(data_url, headers=headers)
+            cookies = requests.get(infosys_url).cookies
+            response = requests.post(data_url, headers=headers, cookies=cookies)
             if response.status_code != 200:
                 response.raise_for_status()
             data = json.loads(response.text)
@@ -97,7 +97,6 @@ def fetch_scores():
             data.reverse()
             break
         except Exception:
-            time.sleep(3)
             continue
     if not data:
         raise requests.RequestException

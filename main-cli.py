@@ -84,7 +84,7 @@ def main():
             bar.text('computing captcha')
             generated_ids = model.generate(pixel_values)
             captcha_code = processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
-            captcha_code = captcha_code.replace(' ', '')
+            captcha_code = ''.join([c for c in captcha_code if c.isdigit()])
             print(captcha_code)
             if len(captcha_code) != 4 or not captcha_code.isdigit():
                 browser.get(browser.current_url)
@@ -96,16 +96,17 @@ def main():
             browser.find_element(By.ID, 'tbCheckCode').clear()
             browser.find_element(By.ID, 'tbCheckCode').send_keys(captcha_code)
             browser.find_element(By.ID, 'OKButton').click()
+            if browser.current_url == infosys_url:
+                break
             try:
-                browser.find_element(By.ID, 'FailureText')
-                time.sleep(3)
-                bar.text('another round')
+                failure = browser.find_element(By.ID, 'FailureText')
+                if failure.text.find(username) != -1:
+                    browser.find_element(By.ID, 'ReLoginButton').click()
+                    raise EOFError
             except Exception:
-                print('login successful')
-                bar(100 - i)
                 break
 
-    time.sleep(3)
+    time.sleep(5)
     # fetch data
     data = []
     with alive_bar(5, title='fetching data') as bar:
@@ -114,7 +115,8 @@ def main():
             try:
                 data_url = 'https://infosys.nttu.edu.tw/n_LearningEffect/Stu_StudyEf_Dashboard.aspx/GetJson'
                 headers = {'Content-Type': 'application/json; charset=utf-8'}
-                response = requests.post(data_url, headers=headers)
+                cookies = requests.get(infosys_url).cookies
+                response = requests.post(data_url, headers=headers, cookies=cookies)
                 if response.status_code != 200:
                     response.raise_for_status()
                 data = json.loads(response.text)
@@ -123,7 +125,6 @@ def main():
                 bar(5 - i)
                 break
             except Exception:
-                time.sleep(3)
                 continue
     if not data:
         raise requests.RequestException
