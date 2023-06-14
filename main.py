@@ -43,15 +43,18 @@ class CrawlerApp(App):
         yield LoadingIndicator()
         yield LoginForm()
         with VerticalScroll():
-            with Center():
-                yield Static(id='ranks')
-                yield Static(id='scores')
-                yield Static(id='credits')
-                yield Pretty('')
+            yield Center(Static(id='years'))
+            yield Center(Static(id='result'))
+            yield Static(id='ranks')
+            yield Static(id='scores')
+            yield Static(id='credits')
+            yield Pretty('')
         yield Footer()
 
     def on_mount(self) -> None:
         self.query_one(LoadingIndicator).display = False
+        self.query_one('#years').display = False
+        self.query_one('#result').display = False
         self.query_one('#ranks').display = False
         self.query_one('#scores').display = False
         self.query_one('#credits').display = False
@@ -68,25 +71,40 @@ class CrawlerApp(App):
     def update_data(self) -> None:
         self.query_one(LoadingIndicator).display = True
         self.query_one(LoginForm).display = False
+        self.query_one('#years').display = False
+        self.query_one('#result').display = False
         self.query_one('#ranks').display = False
         self.query_one('#scores').display = False
         self.query_one('#credits').display = False
         self.query_one(Pretty).display = False
+
         data = fetch_scores()
-        ranks = termcharts.bar(dict((datum['semYear'], int(datum['sort'])) for datum in data), title='ranks')
-        scores = termcharts.bar(dict((datum['semYear'], int(datum['avg_score'])) for datum in data), title='scores')
-        credits = termcharts.bar(dict((datum['semYear'], int(datum['sum_credit'])) for datum in data), title='credits')
+        avg_score = sum([datum['avg_score'] for datum in data]) / len(data)
+        sum_credit = sum([datum['sum_credit'] for datum in data])
+        result = f'average score: {avg_score}, total credit: {int(sum_credit)}'
+        years = ', '.join([datum['semYear'] for datum in data])
+        ranks = termcharts.bar(dict((datum['semYear'], int(datum['sort'])) for datum in data), title='ranks', rich=True)
+        scores = termcharts.bar(
+            dict((datum['semYear'], int(datum['avg_score'])) for datum in data), title='scores', rich=True
+        )
+        credits = termcharts.bar(
+            dict((datum['semYear'], int(datum['sum_credit'])) for datum in data), title='credits', rich=True
+        )
+
         self.call_from_thread(self.query_one(Pretty).update, data)
+        self.call_from_thread(self.query_one('#years').update, years)
+        self.call_from_thread(self.query_one('#result').update, result)
         self.call_from_thread(self.query_one('#ranks').update, ranks)
         self.call_from_thread(self.query_one('#scores').update, scores)
         self.call_from_thread(self.query_one('#credits').update, credits)
 
     def on_worker_state_changed(self, event) -> None:
         self.log(event)
+        self.query_one('#years').display = True
+        self.query_one('#result').display = True
         self.query_one('#ranks').display = True
         self.query_one('#scores').display = True
         self.query_one('#credits').display = True
-        self.query_one(Pretty).display = True
         self.query_one(LoadingIndicator).display = False
 
 
